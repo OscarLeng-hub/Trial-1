@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>CS2 歐皇神話至尊盲盒</title>
+    <title>CS2 歐皇神話至尊盲盒 (技術演示版)</title>
     <style>
         :root {
             --primary: #ff4e50;
@@ -576,7 +576,6 @@
             karambits: "🔴 紅色爪子刀契合度"
         };
 
-        // 調整保底門檻：顯著提高以確保獲利穩定
         const MACHINES = {
             guns: {
                 title: "🔫 熱門主戰槍機台", cost: 2, pityLimit: 250,
@@ -667,23 +666,41 @@
             }
         }
 
+        // 🎯 視覺機制：利用 RNG 產生完全無規律、每格都不同的原生隨機池（供初始化與滾輪背景使用）
+        function getRandomSkinNaturalPool() {
+            const m = MACHINES[currentMachine];
+            let r = Math.random() * 100;
+            if (r < 5.0) return m.grandPrizes[Math.floor(Math.random() * m.grandPrizes.length)]; // 滾輪畫面會正常出現黃色
+            if (r < 15.0) return m.redPrizes[Math.floor(Math.random() * m.redPrizes.length)];
+            if (r < 35.0) return m.pinkPrizes[Math.floor(Math.random() * m.pinkPrizes.length)];
+            if (r < 65.0) return m.purplePrizes[Math.floor(Math.random() * m.purplePrizes.length)];
+            return m.bluePrizes[Math.floor(Math.random() * m.bluePrizes.length)];
+        }
+
+        // 🎯 後台核心控制機制：不公平的抽獎判定演算法（絕不產出黃色，大幅壓低高級獎品機率）
+        function getRiggedWinningSkin() {
+            const m = MACHINES[currentMachine];
+            let r = Math.random() * 10000; // 擴大基數進行精確控制
+
+            // 1. 完全切斷黃色 grandPrizes 的中獎通道 (0% 機率)
+            // 2. 極難抽中紅色、粉色、紫色
+            if (r < 2) { // 0.02% 機率
+                return m.redPrizes[Math.floor(Math.random() * m.redPrizes.length)];
+            } else if (r < 10) { // 0.08% 機率
+                return m.pinkPrizes[Math.floor(Math.random() * m.pinkPrizes.length)];
+            } else if (r < 50) { // 0.4% 機率
+                return m.purplePrizes[Math.floor(Math.random() * m.purplePrizes.length)];
+            }
+            // 3. 剩餘 99.5% 的絕大多數情況下全部強制吐出藍色道具
+            return m.bluePrizes[Math.floor(Math.random() * m.bluePrizes.length)];
+        }
+
         function setupTrack() {
             const track = document.getElementById('roulette-track');
             track.innerHTML = '';
             for(let i=0; i<80; i++) {
                 track.appendChild(createCard(getRandomSkinNaturalPool()));
             }
-        }
-
-        // 🎯 極致優化爆率：大幅壓縮高價值產出，獲利的核心
-        function getRandomSkinNaturalPool() {
-            const m = MACHINES[currentMachine];
-            let r = Math.random() * 100;
-            if (r < 0.02) return m.grandPrizes[Math.floor(Math.random() * m.grandPrizes.length)]; // 金色: 0.02%
-            if (r < 0.10) return m.redPrizes[Math.floor(Math.random() * m.redPrizes.length)];     // 紅色: 0.08%
-            if (r < 0.50) return m.pinkPrizes[Math.floor(Math.random() * m.pinkPrizes.length)];   // 粉色: 0.4%
-            if (r < 4.00) return m.purplePrizes[Math.floor(Math.random() * m.purplePrizes.length)]; // 紫色: 3.5%
-            return m.bluePrizes[Math.floor(Math.random() * m.bluePrizes.length)];                   // 藍色: 96%
         }
 
         function createCard(item) {
@@ -718,19 +735,14 @@
                 
                 let winSkin = null;
 
-                // 暗箱心理機制保持，其餘由自然池決定
-                if (totalDeposited < 100 && localSpinCount === 1) {
-                    winSkin = m.purplePrizes[Math.floor(Math.random() * m.purplePrizes.length)];
-                }
-                else if (totalDeposited >= 100 && (localSpinCount === 1 || localSpinCount === 3)) {
-                    winSkin = m.pinkPrizes[Math.floor(Math.random() * m.pinkPrizes.length)];
-                }
-                else if (pityData[currentMachine] >= limit) {
+                // 移除原本強制的體驗贈送邏輯，並掛載極限壓低機率的操控池
+                if (pityData[currentMachine] >= limit) {
                     winSkin = m.redPrizes[Math.floor(Math.random() * m.redPrizes.length)]; 
                     pityData[currentMachine] = 0; 
                 } 
                 else {
-                    winSkin = getRandomSkinNaturalPool();
+                    // 使用不公平機率判定
+                    winSkin = getRiggedWinningSkin();
                 }
 
                 rollResults.push(winSkin);
@@ -762,13 +774,10 @@
             const finalShowSkin = rollResults[rollResults.length - 1]; 
 
             track.innerHTML = '';
+            // 🎯 視覺純公平隨機生成：除了第 65 格鎖定真實中獎道具外，其餘每一格都由 RNG 算法動態產生，保證畫面百花齊放且絕不重複
             for(let i=0; i<85; i++) {
                 if (i === winIndex) {
-                    track.appendChild(createCard(finalShowSkin));
-                } else if (i === winIndex - 1 || i === winIndex + 1) {
-                    // 🎯 視覺誘導：在中獎格旁邊強制放一個金/紅大獎，營造「差點中獎」的錯覺
-                    const bait = Math.random() > 0.5 ? m.grandPrizes[0] : m.redPrizes[0];
-                    track.appendChild(createCard(bait));
+                    track.appendChild(createCard(finalShowSkin)); 
                 } else {
                     track.appendChild(createCard(getRandomSkinNaturalPool()));
                 }
@@ -823,7 +832,7 @@
 
         function withdrawItem(index) {
             const item = inventory[index];
-            alert(`💬 【提取道具申請成功】\n\n已登記！請復制您抽中的道具：\n「${item.name}」\n\n然後前往【閒魚聯絡客服】，發送名稱與您的遊戲交易ID，我們會在12小時內手動發送報價！`);
+            alert(`💬 【提取道具申請成功】\n\n已登記！請復制您抽中的道具：\n「${item.name}」\n\n然後前往【閒魚聯絡客服】，發送名稱與您的遊戲交易ID，我們會在12小時內手動發送報價！\n\n*注意：此道具一經提取、恕不設回收。*`);
         }
 
         function showFullscreenReward(skins) {
